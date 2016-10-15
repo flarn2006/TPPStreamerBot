@@ -1,7 +1,11 @@
 #!/usr/bin/python
 
+# Whisper functionality is not working yet, as I can't figure out how to receive whispers using this library.
+# Why can't Twitch just use PRIVMSG for that? :-/
+
 import sys
 import re
+import thread
 from time import sleep
 from datetime import datetime, timedelta
 import requests
@@ -20,6 +24,8 @@ identity = { # Make sure to set these if they aren't already!
     'twitch_irc_nick':      '',
     'twitch_irc_oauth':     ''}
 
+botOwnerIrcName = 'flarn2006'
+
 updaterId = 'xkrzrxrcl3ru' # Main updater ID, for the current run or intermission.
 updaterId2 = 'uerqm64a940j' # Secondary updater ID, for mods who talk about other things a lot.
 updaterIdTest = 'ty0ak5tjb4fq' # Test updater ID, used in test mode.
@@ -27,13 +33,15 @@ updaterIdTest = 'ty0ak5tjb4fq' # Test updater ID, used in test mode.
 modList = ['twitchplayspokemon'] # People whose messages are (almost) always worth posting to the updater.
 modList2 = ['projectrevotpp', 'felkcraft'] # Only post these ones to the secondary updater.
 
-testMode = False # Set to True to enter messages manually.
+testMode = 0 # 0) Normal mode
+             # 1) Run normally, but post to test updater
+			 # 2) Test mode - read messages from console instead of Twitch chat
 
 # Messages matching any of these regular expressions will be completely ignored.
 msgRejectPatterns = [
 	re.compile('^!'), # Commands beginning with '!' (e.g. '!bet')
 	re.compile('^_mode '), # Streamer has used this before to manually activate anarchy/democracy.
-	re.compile('^(?:(?:[abxylr]|up|down|left|right|start|select|home|wait|anarchy|democracy|\\d{1,3},\\d{1,3}|move|switch|run|item[0-9]+(p[1-6](m[1-4])?))[0-9]*\\+?)+$')] # Inputs - see http://regex101.com/ for help.
+	re.compile('^(?:(?:[abxylr]|up|down|left|right|start|select|home|wait|anarchy|democracy|\\d{1,3},\\d{1,3}|move|switch|run|item[0-9]+(p[1-6](m[1-4])?))[0-9]*\\+?)+$', re.I)] # Inputs - see http://regex101.com/ for help.
 
 # End configurable parameters
 
@@ -44,12 +52,14 @@ ircNames = {}
 
 if len(sys.argv) >= 2:
 	if sys.argv[1] == '-t':
-		testMode = True
+		testMode = 2
+	elif sys.argv[1] == '-T':
+		testMode = 1
 
-if testMode:
-	# Let's not post fake test messages to the real updater.
+if testMode > 0:
 	updaterId = updaterIdTest
 	updaterId2 = updaterIdTest
+	modList.append(botOwnerIrcName) # treat me as a streamer for easier testing
 
 reddit = praw.Reddit(
 	user_agent = 'TPPStreamerBot, by /u/flarn2006',
@@ -59,6 +69,7 @@ reddit = praw.Reddit(
 	password = identity['reddit_password'])
 
 mentionedUserRegex = re.compile('^@([^.,:\\s]+)')
+ircNameRegex = re.compile('^[A-Za-z0-9_]+$')
 
 def getDisplayName(username):
 	if username in displayNames:
@@ -83,9 +94,14 @@ def getDisplayNameForUpdater(username):
 		return dn
 
 def getIrcName(displayname):
-	if displayname in ircNames:
+	if ircNameRegex.match(displayname):
+		# This is a valid Twitch/IRC name on its own. No need to look it up.
+		return displayname.lower()
+	elif displayname in ircNames:
+		# This is a recognized display name. Return its associated username.
 		return ircNames[displayname]
 	else:
+		# Neither a valid Twitch name, nor a recognized display name. Return an empty string to mean no match.
 		return ''
 
 def isMsgImportant(msg):
@@ -104,9 +120,9 @@ def escapeMarkdown(text):
 
 def postUpdate(updater, msg):
 	if updater == updaterId2:
-		print '\x1b[0;37m-> \x1b[1;30m{}\x1b[m'.format(msg)
+		print '\x1b[0;37m-> \x1b[1;30m{}\x1b[m'.format(msg.encode('utf-8'))
 	else:
-		print '\x1b[1;36m-> \x1b[0;36m{}\x1b[m'.format(msg)
+		print '\x1b[1;36m-> \x1b[0;36m{}\x1b[m'.format(msg.encode('utf-8'))
 	
 	for i in xrange(10):
 		try:
@@ -122,7 +138,7 @@ def postUpdate(updater, msg):
 def findUsernameInMsg(msg):
 	match = mentionedUserRegex.match(msg)
 	if match:
-		return match.group(1).lower()
+		return getIrcName(match.group(1).lower())
 	else:
 		return ''
 
@@ -138,14 +154,12 @@ def handleMsg(user, msg):
 		if upd != '':
 			# Message is from a monitored user.
 			# First, see if the message is a reply to another user, so we can pull their message.
-			mentionedUser = getIrcName(findUsernameInMsg(msg))
+			mentionedUser = findUsernameInMsg(msg)
 			
-			if mentionedUser != '' and mentionedUser in prevMsgs:
+			if mentionedUser != '' and mentionedUser in prevMsgs and mentionedUser not in modList:
 				# We've got a match! But let's make sure the message was posted recently.
 				if datetime.now() - prevMsgTimes[mentionedUser] > timedelta(0, 300):
 					# Looks like it wasn't. Let's remove it from the list and forget about it.
-					prevMsgs.pop(mentionedUser)
-					prevMsgTimes.pop(mentionedUser)
 					mentionedUser = ''
 			else:
 				# Nope, no match. Either nobody was mentioned or we have no message stored from them.
@@ -157,23 +171,40 @@ def handleMsg(user, msg):
 			else:
 				# Update including message from other user
 				postUpdate(upd, u'[Streamer] {}: {}\n\n{}: {}'.format(getDisplayNameForUpdater(mentionedUser), prevMsgs[mentionedUser], getDisplayName(user), msg))
+		
+		# Add the message to the previous messages list.
+		prevMsgs[user] = msg
+		prevMsgTimes[user] = datetime.now()
+		dn = getDisplayName(user)
+		prevMsgs[dn] = msg
+		prevMsgTimes[dn] = prevMsgTimes[user]
+
+def handleWhisper(user, msg):
+	cmd = msg.split(' ')
+	cmd[0] = cmd[0].lower()
+
+	if cmd[0] == 'msg':
+		cmd[1] = cmd[1].lower()
+		if cmd[1] in prevMsgs:
+			return u'[{}] {}: {}'.format(prevMsgTimes[cmd[1]], getDisplayName(cmd[1]), prevMsgs[cmd[1]])
 		else:
-			# Message isn't from a monitored user, but still add it to the previous messages list.
-			prevMsgs[user] = msg
-			prevMsgTimes[user] = datetime.now()
-			dn = getDisplayName(user)
-			prevMsgs[dn] = msg
-			prevMsgTimes[dn] = prevMsgTimes[user]
+			return u"Don't have a message from {}.".format(cmd[1])
+	elif cmd[0] == 'help':
+		return 'TPPStreamerBot, by /u/flarn2006\n\
+		msg (user) - Check the last thing said by a user'
+	else:
+		return u'Unrecognized command "{}"'.format(cmd[0])
 
 class IrcWatcher(irc.bot.SingleServerIRCBot):
 	firstMsg = False
 
 	def __init__(self):
-		server = irc.bot.ServerSpec('irc.twitch.tv', 6667, identity['twitch_irc_oauth'])
+		server = irc.bot.ServerSpec('irc.chat.twitch.tv', 6667, identity['twitch_irc_oauth'])
 		print '\x1b[1;33mConnecting to Twitch chat...\x1b[m'
 		irc.bot.SingleServerIRCBot.__init__(self, [server], identity['twitch_irc_nick'], identity['twitch_irc_nick'])
 	
 	def on_welcome(self, server, event):
+		server.send_raw('CAP REQ :twitch.tv/commands')
 		print '\x1b[1;33mJoining TPP channel...\x1b[m'
 		server.join('#twitchplayspokemon')
 		print '\x1b[1;32mNow monitoring chat.\x1b[m'
@@ -184,6 +215,13 @@ class IrcWatcher(irc.bot.SingleServerIRCBot):
 			print '\x1b[1;32mFirst message received.\x1b[m'
 			self.firstMsg = False
 		handleMsg(event.source.nick, event.arguments[0])
+	
+	def on_privmsg(self, server, event):
+		print event
+		reply = handleWhisper(event.source.nick, event.arguments[0])
+		if reply != '':
+			for m in reply.split('\n'):
+				self.privmsg(event.source.nick, m)
 
 # Main loop begins here.
 
@@ -191,7 +229,7 @@ print '\x1b[1;34m * * * * * * * * * * * * * * * * *\x1b[m'
 print '\x1b[1;34m* TPPStreamerBot, by /u/flarn2006 *\x1b[m'
 print '\x1b[1;34m * * * * * * * * * * * * * * * * *\x1b[m'
 
-if testMode:
+if testMode == 2:
 	# Test mode is active. Get test messages from the console instead of from unreliable Twitch chat.
 	print '\x1b[1;35mRunning in test mode. Type "exit" when done.'
 	
@@ -209,7 +247,7 @@ if testMode:
 	
 	print '\x1b[m'
 else:
-	# We're running in production. Connect to Twitch chat and read messages from there.
+	# Connect to Twitch chat and read messages from there.
 	try:
 		IrcWatcher().start()
 	except KeyboardInterrupt:
