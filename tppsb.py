@@ -1,8 +1,5 @@
 #!/usr/bin/python
 
-# Whisper functionality is not working yet, as I can't figure out how to receive whispers using this library.
-# Why can't Twitch just use PRIVMSG for that? :-/
-
 import sys
 import re
 import thread
