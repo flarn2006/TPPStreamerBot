@@ -6,6 +6,7 @@
 import sys
 import re
 import thread
+from urllib import urlencode
 from time import sleep
 from datetime import datetime, timedelta
 import requests
@@ -26,7 +27,7 @@ identity = { # Make sure to set these if they aren't already!
 
 botOwnerIrcName = 'flarn2006'
 
-updaterId = 'xkrzrxrcl3ru' # Main updater ID, for the current run or intermission.
+updaterId = 'ye5bm0i3opg5' # Main updater ID, for the current run or intermission.
 updaterId2 = 'uerqm64a940j' # Secondary updater ID, for mods who talk about other things a lot.
 updaterIdTest = 'ty0ak5tjb4fq' # Test updater ID, used in test mode.
 
@@ -77,7 +78,7 @@ def getDisplayName(username):
 	else:
 		headers = {'Client-ID':identity['twitch_client_id'], 'Accept':'application/vnd.twitchtv.v3+json'}
 		try:
-			req = requests.get('https://api.twitch.tv/kraken/users/'+username, headers=headers)
+			req = requests.get('https://api.twitch.tv/kraken/users/'+urlencode(username), headers=headers)
 			dn = req.json()[u'display_name']
 			displayNames[username] = dn
 			ircNames[dn.lower()] = username
@@ -180,18 +181,34 @@ def handleMsg(user, msg):
 		prevMsgTimes[dn] = prevMsgTimes[user]
 
 def handleWhisper(user, msg):
-	cmd = msg.split(' ')
+	cmd = msg.split(u' ')
 	cmd[0] = cmd[0].lower()
 
-	if cmd[0] == 'msg':
-		cmd[1] = cmd[1].lower()
-		if cmd[1] in prevMsgs:
+	if cmd[0] == 'lastmsg':
+		try:
+			cmd[1] = cmd[1].lower()
+			if cmd[1] in prevMsgs:
+				username = cmd[1]
+			elif getDisplayName(cmd[1]) in prevMsgs:
+				username = getDisplayName(cmd[1])
+			else:
+				return u"{} didn't say anything recently.".format(cmd[1])
 			return u'[{}] {}: {}'.format(prevMsgTimes[cmd[1]], getDisplayName(cmd[1]), prevMsgs[cmd[1]])
+		except IndexError:
+			return 'Usage: lastmsg <username>'
+	elif cmd[0] == 'update':
+		if user == botOwnerIrcName:
+			text = unicode.join(u' ', cmd[1:])
+			if text != '':
+				postUpdate(updaterId, text)
+				return 'Update posted to https://reddit.com/live/' + updaterId
+			else:
+				return 'Usage: update <text>'
 		else:
-			return u"Don't have a message from {}.".format(cmd[1])
+			return 'Sorry, you do not have permission to use this command.'
 	elif cmd[0] == 'help':
 		return 'TPPStreamerBot, by /u/flarn2006\n\
-		msg (user) - Check the last thing said by a user'
+		lastmsg (user) - Check the last thing said by a user'
 	else:
 		return u'Unrecognized command "{}"'.format(cmd[0])
 
@@ -204,7 +221,7 @@ class IrcWatcher(irc.bot.SingleServerIRCBot):
 		irc.bot.SingleServerIRCBot.__init__(self, [server], identity['twitch_irc_nick'], identity['twitch_irc_nick'])
 	
 	def on_welcome(self, server, event):
-		server.send_raw('CAP REQ :twitch.tv/commands')
+		server.cap('REQ', 'twitch.tv/commands')
 		print '\x1b[1;33mJoining TPP channel...\x1b[m'
 		server.join('#twitchplayspokemon')
 		print '\x1b[1;32mNow monitoring chat.\x1b[m'
@@ -216,12 +233,12 @@ class IrcWatcher(irc.bot.SingleServerIRCBot):
 			self.firstMsg = False
 		handleMsg(event.source.nick, event.arguments[0])
 	
-	def on_privmsg(self, server, event):
-		print event
+	def on_whisper(self, server, event):
+		print u'\x1b[1;32m[W] {}:\x1b[0;32m {}\x1b[m'.format(event.source.nick, event.arguments[0])
 		reply = handleWhisper(event.source.nick, event.arguments[0])
 		if reply != '':
 			for m in reply.split('\n'):
-				self.privmsg(event.source.nick, m)
+				server.privmsg('jtv', '/w {} {}'.format(event.source.nick, m))
 
 # Main loop begins here.
 
