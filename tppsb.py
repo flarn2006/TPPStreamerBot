@@ -190,7 +190,7 @@ def handleWhisper(user, msg):
 				username = getDisplayName(cmd[1])
 			else:
 				return u"{} didn't say anything recently.".format(cmd[1])
-			return u'[{}] {}: {}'.format(prevMsgTimes[cmd[1]], getDisplayName(cmd[1]), prevMsgs[cmd[1]])
+			return u'[{} ago] {}: {}'.format(datetime.now()-prevMsgTimes[cmd[1]], getDisplayName(cmd[1]), prevMsgs[cmd[1]])
 		except IndexError:
 			return 'Usage: lastmsg <username>'
 	elif cmd[0] == 'update':
