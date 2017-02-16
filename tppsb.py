@@ -6,7 +6,7 @@
 import sys
 import re
 import thread
-from urllib import urlencode
+import urllib
 from time import sleep
 from datetime import datetime, timedelta
 import requests
@@ -78,13 +78,13 @@ def getDisplayName(username):
 	else:
 		headers = {'Client-ID':identity['twitch_client_id'], 'Accept':'application/vnd.twitchtv.v3+json'}
 		try:
-			req = requests.get('https://api.twitch.tv/kraken/users/'+urlencode(username), headers=headers)
+			req = requests.get('https://api.twitch.tv/kraken/users/'+urllib.quote(username), headers=headers)
 			dn = req.json()[u'display_name']
 			displayNames[username] = dn
 			ircNames[dn.lower()] = username
 			return dn
 		except Exception as ex:
-			print '\x1b[1;31m[!] Error getting display name for {}: \x1b[0;31m{}\x1b[m'.format(username, ex)
+			print '\x1b[1;31m[!] Error getting display name for {}\x1b[m'.format(username)
 			return username
 
 def getDisplayNameForUpdater(username):
