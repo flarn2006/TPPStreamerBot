@@ -235,10 +235,13 @@ class IrcWatcher(irc.bot.SingleServerIRCBot):
 	
 	def on_whisper(self, server, event):
 		print u'\x1b[1;32m[W] {}:\x1b[0;32m {}\x1b[m'.format(event.source.nick, event.arguments[0])
-		reply = handleWhisper(event.source.nick, event.arguments[0])
-		if reply != '':
-			for m in reply.split('\n'):
-				server.privmsg('jtv', '/w {} {}'.format(event.source.nick, m))
+		try:
+			reply = handleWhisper(event.source.nick, event.arguments[0])
+			if reply != '':
+				for m in reply.split('\n'):
+					server.privmsg('jtv', u'/w {} {}'.format(event.source.nick, m)[:511])
+		except Exception as ex:
+			print u'\x1b[1;31mError processing whisper: \x1b[0;31m{}\x1b[m'.format(ex)
 
 # Main loop begins here.
 
