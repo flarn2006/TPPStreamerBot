@@ -196,18 +196,35 @@ def handleWhisper(user, msg):
 	elif cmd[0] == 'update':
 		if user == botOwnerIrcName:
 			text = unicode.join(u' ', cmd[1:])
-			if text != '':
+			if text:
 				postUpdate(updaterId, text)
 				return 'Update posted to https://reddit.com/live/' + updaterId
 			else:
 				return 'Usage: update <text>'
 		else:
 			return 'Sorry, you do not have permission to use this command.'
+	#elif cmd[0] == 'wtpp':
+	#	if user == botOwnerIrcName:
+	#		text = unicode.join(u' ', cmd[1:])
+	#		if text:
+	#			send_whisper('tpp', text)
+	#			return 'Whisper sent'
+	#		else:
+	#			return 'Usage: wtpp <text>'
+	#	else:
+	#		return 'Sorry, you do not have permission to use this command.'
 	elif cmd[0] == 'help':
 		return 'TPPStreamerBot, by /u/flarn2006\n\
 		lastmsg (user) - Check the last thing said by a user'
 	else:
 		return u'Unrecognized command "{}"'.format(cmd[0])
+
+def send_whisper(user, msg):
+	global bot
+	if msg != '':
+		print u'\x1b[1;32m[W] {} <- \x1b[0;32m{}\x1b[m'.format(user, msg)
+		for m in msg.split('\n'):
+			bot.connection.privmsg('jtv', u'/w {} {}'.format(user, m)[:511])
 
 class IrcWatcher(irc.bot.SingleServerIRCBot):
 	firstMsg = False
@@ -231,12 +248,10 @@ class IrcWatcher(irc.bot.SingleServerIRCBot):
 		handleMsg(event.source.nick, event.arguments[0])
 	
 	def on_whisper(self, server, event):
-		print u'\x1b[1;32m[W] {}:\x1b[0;32m {}\x1b[m'.format(event.source.nick, event.arguments[0])
+		print u'\x1b[1;33m[W] {}:\x1b[0;33m {}\x1b[m'.format(event.source.nick, event.arguments[0])
 		try:
 			reply = handleWhisper(event.source.nick, event.arguments[0])
-			if reply != '':
-				for m in reply.split('\n'):
-					server.privmsg('jtv', u'/w {} {}'.format(event.source.nick, m)[:511])
+			send_whisper(event.source.nick, reply)
 		except Exception as ex:
 			print u'\x1b[1;31mError processing whisper: \x1b[0;31m{}\x1b[m'.format(ex)
 
@@ -266,6 +281,7 @@ if testMode == 2:
 else:
 	# Connect to Twitch chat and read messages from there.
 	try:
-		IrcWatcher().start()
+		bot = IrcWatcher()
+		bot.start()
 	except KeyboardInterrupt:
 		print '\x1b[1;34mExiting.\x1b[m'
