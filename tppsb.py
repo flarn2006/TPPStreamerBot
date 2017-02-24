@@ -24,7 +24,7 @@ identity = { # Make sure to set these if they aren't already!
 
 botOwnerIrcName = 'flarn2006'
 
-updaterId = 'ye5bm0i3opg5' # Main updater ID, for the current run or intermission.
+updaterId = 'yhpqvq8fuiwg' # Main updater ID, for the current run or intermission.
 updaterId2 = 'uerqm64a940j' # Secondary updater ID, for mods who talk about other things a lot.
 updaterIdTest = 'ty0ak5tjb4fq' # Test updater ID, used in test mode.
 
@@ -39,7 +39,8 @@ testMode = 0 # 0) Normal mode
 msgRejectPatterns = [
 	re.compile('^!'), # Commands beginning with '!' (e.g. '!bet')
 	re.compile('^_mode '), # Streamer has used this before to manually activate anarchy/democracy.
-	re.compile('^(?:(?:[abxylr]|up|down|left|right|start|select|home|wait|anarchy|democracy|\\d{1,3},\\d{1,3}|move|switch|run|item[0-9]+(p[1-6](m[1-4])?))[0-9]*\\+?)+$', re.I)] # Inputs - see http://regex101.com/ for help.
+	re.compile('^(?:(?:[abxylr]|up|down|left|right|start|select|home|wait|anarchy|democracy|\\d{1,3},\\d{1,3}|move|switch|run|item[0-9]+(p[1-6](m[1-4])?))[0-9]*\\+?)+$', re.I), # Inputs - see http://regex101.com/ for help.
+	re.compile('https:\/\/(?:www\.)?twitch\.tv\/tankturntactics')] # DatSheffy no spam
 
 # End configurable parameters
 
