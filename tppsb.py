@@ -22,13 +22,13 @@ identity = { # Make sure to set these if they aren't already!
     'twitch_irc_nick':      '',
     'twitch_irc_oauth':     ''}
 
-botOwnerIrcName = 'flarn2006'
+adminIrcNames = ['flarn2006', 'deadinsky']
 
-updaterId = 'yhpqvq8fuiwg' # Main updater ID, for the current run or intermission.
-updaterId2 = 'uerqm64a940j' # Secondary updater ID, for mods who talk about other things a lot.
+updaterId = 'zr4lmzz2p2tp' # Main updater ID, for the current run or intermission.
+updaterId2 = 'z0xcggm226qa' # Secondary updater ID, for mods who talk about other things a lot.
 updaterIdTest = 'ty0ak5tjb4fq' # Test updater ID, used in test mode.
 
-modList = ['twitchplayspokemon'] # People whose messages are (almost) always worth posting to the updater.
+modList = ['twitchplayspokemon', 'aissurtievos'] # People whose messages are (almost) always worth posting to the updater.
 modList2 = ['projectrevotpp', 'felkcraft'] # Only post these ones to the secondary updater.
 
 testMode = 0 # 0) Normal mode
@@ -39,7 +39,7 @@ testMode = 0 # 0) Normal mode
 msgRejectPatterns = [
 	re.compile('^!'), # Commands beginning with '!' (e.g. '!bet')
 	re.compile('^_mode '), # Streamer has used this before to manually activate anarchy/democracy.
-	re.compile('^(?:(?:[abxylr]|up|down|left|right|start|select|home|wait|anarchy|democracy|\\d{1,3},\\d{1,3}|move|switch|run|item[0-9]+(p[1-6](m[1-4])?))[0-9]*\\+?)+$', re.I), # Inputs - see http://regex101.com/ for help.
+	re.compile('^(?:(?:[abxylrnews]|up|down|left|right|start|select|home|wait|anarchy|democracy|\\d{1,3},\\d{1,3}|move|switch|run|item[0-9]+(p[1-6](m[1-4])?))[0-9]*\\+?)+$', re.I), # Inputs - see http://regex101.com/ for help.
 	re.compile('https:\/\/(?:www\.)?twitch\.tv\/tankturntactics')] # DatSheffy no spam
 
 # End configurable parameters
@@ -58,7 +58,7 @@ if len(sys.argv) >= 2:
 if testMode > 0:
 	updaterId = updaterIdTest
 	updaterId2 = updaterIdTest
-	modList.append(botOwnerIrcName) # treat me as a streamer for easier testing
+	modList.append(adminIrcNames[0]) # treat me as a streamer for easier testing
 
 reddit = praw.Reddit(
 	user_agent = 'TPPStreamerBot, by /u/flarn2006',
@@ -149,6 +149,10 @@ def handleMsg(user, msg):
 			upd = updaterId
 		elif user in modList2:
 			upd = updaterId2
+
+		# Aissurtievos only wants messages beginning with a ` to be posted
+		if user == 'aissurtievos' and not msg.startswith('`'):
+			upd = ''
 		
 		if upd != '':
 			# Message is from a monitored user.
@@ -179,6 +183,7 @@ def handleMsg(user, msg):
 		prevMsgTimes[dn] = prevMsgTimes[user]
 
 def handleWhisper(user, msg):
+	global updaterId
 	cmd = msg.split(u' ')
 	cmd[0] = cmd[0].lower()
 
@@ -195,7 +200,7 @@ def handleWhisper(user, msg):
 		except IndexError:
 			return 'Usage: lastmsg <username>'
 	elif cmd[0] == 'update':
-		if user == botOwnerIrcName:
+		if user in adminIrcNames:
 			text = unicode.join(u' ', cmd[1:])
 			if text:
 				postUpdate(updaterId, text)
@@ -204,19 +209,25 @@ def handleWhisper(user, msg):
 				return 'Usage: update <text>'
 		else:
 			return 'Sorry, you do not have permission to use this command.'
-	#elif cmd[0] == 'wtpp':
-	#	if user == botOwnerIrcName:
-	#		text = unicode.join(u' ', cmd[1:])
-	#		if text:
-	#			send_whisper('tpp', text)
-	#			return 'Whisper sent'
-	#		else:
-	#			return 'Usage: wtpp <text>'
-	#	else:
-	#		return 'Sorry, you do not have permission to use this command.'
+	elif cmd[0] == 'setfeed':
+		if user in adminIrcNames:
+			try:
+				if '/' in cmd[1]:
+					return 'Try again with just the part after the slash, not the whole URL.'
+				updaterId = cmd[1]
+				return u'Moved to https://reddit.com/live/{}.\nPlease use the "update" command to test.'.format(updaterId)
+			except IndexError:
+				return 'Usage: setfeed <updater id>'
+		else:
+			return 'Sorry, you do not have permission to use this command.'
+	elif cmd[0] == 'getfeed':
+		return u'Currently posting to https://reddit.com/live/{}.'.format(updaterId)
 	elif cmd[0] == 'help':
 		return 'TPPStreamerBot, by /u/flarn2006\n\
-		lastmsg (user) - Check the last thing said by a user'
+		lastmsg <user> - Check the last thing said by a user\n\
+		getfeed - Get the URL of the updater currently being posted to\n\
+		setfeed <id> - Set the ID of the updater to post to (admin only)\n\
+		update <text> - Posts a message to the live updater (admin only)'
 	else:
 		return u'Unrecognized command "{}"'.format(cmd[0])
 
