@@ -24,7 +24,7 @@ identity = { # Make sure to set these if they aren't already!
 
 adminIrcNames = ['flarn2006', 'deadinsky']
 
-updaterId = 'zr4lmzz2p2tp' # Main updater ID, for the current run or intermission.
+updaterId = '102szrk71dw9r' # Main updater ID, for the current run or intermission.
 updaterId2 = 'z0xcggm226qa' # Secondary updater ID, for mods who talk about other things a lot.
 updaterIdTest = 'ty0ak5tjb4fq' # Test updater ID, used in test mode.
 
